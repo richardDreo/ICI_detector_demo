@@ -123,14 +123,15 @@ def get_demodulated_samples(samples: np.ndarray, fs: float, demodulation_boundar
 
     current_fs = fs
     filtered = np.copy(samples)
+    order = 4
+    while (current_fs / 2) > fmax*4:
 
-    while (current_fs / 2) / fmax > 4:
-        filtered = decimate(filtered, 4)
+        filtered = decimate(filtered, 4, ftype='fir')
         current_fs /= 4
 
     if demodulation_boundaries[0] > 0:
         # Bandpass filtering
-        b, a = sp.butter(8, demodulation_boundaries, 'bandpass', fs=current_fs)
+        b, a = sp.butter(order, demodulation_boundaries, 'bandpass', fs=current_fs)
         filtered = sp.filtfilt(b, a, filtered, padlen=150)
 
         # Demodulation step
@@ -138,18 +139,15 @@ def get_demodulated_samples(samples: np.ndarray, fs: float, demodulation_boundar
         filtered = np.real(filtered) * np.cos(2 * np.pi * demodulation_boundaries[0] * time_band)
 
         # Lowpass filter
-        b, a = sp.butter(8, band_width, 'lowpass', fs=current_fs)
+        b, a = sp.butter(order, band_width, 'lowpass', fs=current_fs)
         filtered = sp.filtfilt(b, a, filtered)
     else:
         # Lowpass filter
-        b, a = sp.butter(8, band_width, 'lowpass', fs=current_fs)
+        b, a = sp.butter(order, band_width, 'lowpass', fs=current_fs)
         filtered = sp.filtfilt(b, a, filtered)
 
     # Resample
     demodulated_samples = resample(filtered, int(len(filtered) / (current_fs / new_fs)))
-    # Lowpass filter
-    b, a = sp.butter(8, band_width, 'lowpass', fs=current_fs)
-    filtered = sp.filtfilt(b, a, filtered)
 
     return demodulated_samples, new_fs
 

@@ -85,6 +85,40 @@ def get_mean_cepstrum(cepstrum: np.ndarray, quefrency: np.ndarray = None) -> np.
     return mean_cepstrum - linear_trend
 
 
+def get_mean_spectrum(spectrum: np.ndarray, frequency: np.ndarray = None) -> np.ndarray:
+    """
+    Compute the mean cepstrum and remove the linear trend.
+
+    Parameters
+    ----------
+    cepstrum : np.ndarray
+        The cepstrum data.
+    quefrency : np.ndarray, optional
+        The quefrency values. If None, it is assumed to be the same length as the cepstrum.
+
+    Returns
+    -------
+    np.ndarray
+        The mean cepstrum with the linear trend removed.
+    """
+    logging.debug("Call Function: get_mean_cepstrum")
+    if frequency is None:
+        frequency = np.arange(spectrum.shape[0])
+
+    fmin = int(0.1 * len(frequency))
+    fmax = int(0.9 * len(frequency))
+
+    mean_cepstrum = np.nanmean(spectrum, axis=1)
+
+    sub_quefrency = quefrency[qmin:qmax]
+    sub_mean_cepstrum = signal.medfilt(mean_cepstrum[qmin:qmax], 5)
+
+    poly_coefficients = np.polyfit(sub_quefrency, sub_mean_cepstrum, deg=1)
+    linear_trend = np.polyval(poly_coefficients, quefrency)
+
+    return mean_cepstrum - linear_trend
+
+
 def get_preset_parameters(species=None):    
     logging.debug("Call Function: get_preset_parameters")
     params = [

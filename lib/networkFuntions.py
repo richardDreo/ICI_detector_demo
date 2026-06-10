@@ -5,6 +5,7 @@ import pandas as pd
 import glob
 from datetime import timedelta
 from obspy import read, UTCDateTime, Stream
+from obspy.clients.filesystem.sds import Client
 from datetime import timedelta
 import gc
 import numpy as np
@@ -206,46 +207,74 @@ def get_network_file_list(net: str, sta: str, sds_path: str) -> pd.DataFrame:
 
 #     return df_files
 
-
-def get_stream_for_selected_period(df_files: pd.DataFrame, starttime: str, endtime: str, channel: str = None) -> Stream:
+def get_stream_for_selected_period(sds_root, network, station, location, channel, starttime, endtime):
     """
-    Create a stream containing the data of the considered time window. For computation matters, the time window should
-    not exceed a few hours in the case of a low sample rate (i.e., 48h at fs=50Hz).
+    Retrieve a stream for a selected period using ObsPy's embedded functions and SeisComP data structure.
 
-    Parameters
-    ----------
-    df_files : pd.DataFrame
-        A pandas DataFrame containing the existing files for the current station.
-    starttime : str
-        Starting point of the time window (datetime).
-    endtime : str
-        End point of the time window (datetime).
-    channel : str, optional
-        The channel to select.
+    Parameters:
+    - sds_root: Path to the root of the SeisComP SDS archive.
+    - network: Network code (e.g., "XX").
+    - station: Station code (e.g., "ABC").
+    - location: Location code (e.g., "00").
+    - channel: Channel code (e.g., "BHZ").
+    - starttime: Start time as UTCDateTime.
+    - endtime: End time as UTCDateTime.
 
-    Returns
-    -------
-    Stream
-        An ObsPy Stream containing the data.
+    Returns:
+    - Stream object containing the requested data.
     """
-    df_selection = df_files.set_index('datetime').loc[
-        pd.date_range(pd.to_datetime(starttime).floor('D'), pd.to_datetime(endtime).floor('D')).date]
+    # Initialize the SDS client
+    client = Client(sds_root)
 
-    stream = Stream()
-
-    for filename in df_selection.filename.to_numpy():
-        stream += read(filename)
-
-    if channel:
-        stream = stream.select(channel=channel)
-
+    # Retrieve the waveform data
     try:
-        stream = stream.merge(method=1)
+        stream = client.get_waveforms(network, station, location, channel, starttime, endtime)
     except Exception as e:
-        logging.error(f"Error merging stream: {e}")
-
-    stream.trim(UTCDateTime(starttime), UTCDateTime(endtime))
+        print(f"Error retrieving waveform data: {e}")
+        return None
+    stream.merge()
     return stream
+
+
+# def get_stream_for_selected_period(df_files: pd.DataFrame, starttime: str, endtime: str, channel: str = None) -> Stream:
+#     """
+#     Create a stream containing the data of the considered time window. For computation matters, the time window should
+#     not exceed a few hours in the case of a low sample rate (i.e., 48h at fs=50Hz).
+
+#     Parameters
+#     ----------
+#     df_files : pd.DataFrame
+#         A pandas DataFrame containing the existing files for the current station.
+#     starttime : str
+#         Starting point of the time window (datetime).
+#     endtime : str
+#         End point of the time window (datetime).
+#     channel : str, optional
+#         The channel to select.
+
+#     Returns
+#     -------
+#     Stream
+#         An ObsPy Stream containing the data.
+#     """
+#     df_selection = df_files.set_index('datetime').loc[
+#         pd.date_range(pd.to_datetime(starttime).floor('D'), pd.to_datetime(endtime).floor('D')).date]
+
+#     stream = Stream()
+
+#     for filename in df_selection.filename.to_numpy():
+#         stream += read(filename)
+
+#     if channel:
+#         stream = stream.select(channel=channel)
+
+#     try:
+#         stream = stream.merge(method=1)
+#     except Exception as e:
+#         logging.error(f"Error merging stream: {e}")
+
+#     stream.trim(UTCDateTime(starttime), UTCDateTime(endtime))
+#     return stream
 
 
 def read_flac_file(flac_file):
@@ -370,6 +399,7 @@ def get_calibrated_stream(stream: Stream, df_stations: pd.DataFrame) -> Stream:
                 # trace.data = (trace.data * TO_VOLT) / (10 ** (sensitivity / 20))
                 trace.data = trace.data / (4.5*(10**7))
         except Exception as e:
-            logging.error(f"Error calibrating trace for station {station} and channel {channel}: {e}")
+            pass
+            # logging.error(f"Error calibrating trace for station {station} and channel {channel}: {e}")
 
     return stream
